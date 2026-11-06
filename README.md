@@ -1,15 +1,13 @@
 # Lucra warehouse
 
 The warehouse finder publishes block codes, positions, bundle counts, and a
-refresh timestamp. The Google Sheet stays private.
+refresh timestamp. The source Google Sheet is shared with anyone who has its
+link. The website does not include that link or the Sheet ID.
 
 ## Enable scheduled refresh
 
-1. Enable the Google Sheets API in a Google Cloud project. Give a dedicated
-   service account Viewer access to the warehouse Sheet.
-2. Store the service account's JSON credential as the repository Actions secret
-   `GOOGLE_SHEETS_CREDENTIALS`. The spreadsheet ID is stored separately in
-   `LUCRA_WAREHOUSE_SHEET_ID`.
+1. Keep the Sheet accessible to anyone with its link, using Viewer access.
+2. Store the Sheet ID as the repository Actions secret `LUCRA_WAREHOUSE_SHEET_ID`.
 3. In **Settings → Pages → Build and deployment**, select **GitHub Actions**.
 4. Run **Refresh warehouse** from the **Actions** tab and verify the timestamp
    on the live site.

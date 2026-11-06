@@ -1,7 +1,9 @@
 """Refresh the local warehouse data from a private Google Sheet."""
 
 import argparse
+import csv
 from datetime import datetime, timezone
+import io
 import json
 import os
 from pathlib import Path
@@ -16,6 +18,8 @@ POSITIONS = {f"{line}{number}" for line, end in (("A", 12), ("B", 13), ("C", 13)
              for number in range(1, end + 1)}
 ENTRY = re.compile(r"([KLA]?[0-9]+)-([1-6])")
 OUTPUT = Path(__file__).with_name("bundle-data.js")
+MAP_RANGE = "A5:D46"
+MAP_TAB_ID = "2131184337"
 
 
 def read_sheet():
@@ -31,10 +35,20 @@ def read_sheet():
         credentials.refresh(GoogleRequest())
         token = credentials.token
 
-    area = quote("'Depo Krokisi'!A5:D46", safe="")
+    area = quote(f"'Depo Krokisi'!{MAP_RANGE}", safe="")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(sheet_id, safe='')}/values/{area}"
     with urlopen(Request(url, headers={"Authorization": f"Bearer {token}"}), timeout=30) as response:
         return json.load(response)["values"]
+
+
+def read_link_shared_sheet():
+    sheet_id = quote(os.environ["LUCRA_WAREHOUSE_SHEET_ID"], safe="")
+    url = (f"https://docs.google.com/spreadsheets/d/{sheet_id}/export"
+           f"?format=csv&gid={MAP_TAB_ID}&range={quote(MAP_RANGE, safe='')}")
+    with urlopen(url, timeout=30) as response:
+        if response.headers.get_content_type() != "text/csv":
+            raise ValueError("The Sheet did not return CSV. Check its link sharing settings.")
+        return list(csv.reader(io.StringIO(response.read().decode("utf-8-sig"))))
 
 
 def collect_bundles(rows):
@@ -94,10 +108,17 @@ def save_snapshot(records):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--from-json", action="store_true", help="Read Google Sheets values JSON from stdin")
+    sources = parser.add_mutually_exclusive_group()
+    sources.add_argument("--from-json", action="store_true", help="Read Google Sheets values JSON from stdin")
+    sources.add_argument("--link-shared", action="store_true", help="Read a Sheet shared with anyone who has its link")
     args = parser.parse_args()
     try:
-        rows = json.load(sys.stdin) if args.from_json else read_sheet()
+        if args.from_json:
+            rows = json.load(sys.stdin)
+        elif args.link_shared:
+            rows = read_link_shared_sheet()
+        else:
+            rows = read_sheet()
         records = collect_bundles(rows)
         save_snapshot(records)
     except (ImportError, KeyError, OSError, ValueError) as error:

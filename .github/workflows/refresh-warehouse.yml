@@ -17,47 +17,17 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      ready: ${{ steps.credentials.outputs.ready }}
     steps:
-      - name: Check Sheets configuration
-        id: credentials
-        env:
-          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
-          LUCRA_WAREHOUSE_SHEET_ID: ${{ secrets.LUCRA_WAREHOUSE_SHEET_ID }}
-        run: |
-          if [[ -n "$GOOGLE_SHEETS_CREDENTIALS" && -n "$LUCRA_WAREHOUSE_SHEET_ID" ]]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "::error::Configure the read-only Google Sheets credentials before refreshing."
-            exit 1
-          else
-            echo "::notice::Google Sheets credentials are pending. The published snapshot stays in place."
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.credentials.outputs.ready == 'true'
         with:
           persist-credentials: false
 
       - name: Read and validate warehouse positions
-        if: steps.credentials.outputs.ready == 'true'
         env:
-          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
           LUCRA_WAREHOUSE_SHEET_ID: ${{ secrets.LUCRA_WAREHOUSE_SHEET_ID }}
-        run: |
-          set -euo pipefail
-          umask 077
-          credential_file="$(mktemp "$RUNNER_TEMP/lucra-sheets.XXXXXX")"
-          trap 'rm -f "$credential_file"' EXIT
-          printf '%s' "$GOOGLE_SHEETS_CREDENTIALS" > "$credential_file"
-          export GOOGLE_APPLICATION_CREDENTIALS="$credential_file"
-          python3 -m venv "$RUNNER_TEMP/lucra-sync"
-          "$RUNNER_TEMP/lucra-sync/bin/python" -m pip install 'google-auth[requests]>=2,<3'
-          "$RUNNER_TEMP/lucra-sync/bin/python" sync_sheet.py
+        run: python3 sync_sheet.py --link-shared
 
       - name: Prepare public files
-        if: steps.credentials.outputs.ready == 'true'
         run: |
           mkdir -p _site/public
           cp index.html warehouse.css warehouse.js bundle-data.js .nojekyll _site/
@@ -65,12 +35,10 @@ jobs:
           sed -i -E "s/bundle-data\.js\?v=[^\"]+/bundle-data.js?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/" _site/index.html
 
       - uses: actions/upload-pages-artifact@v4
-        if: steps.credentials.outputs.ready == 'true'
         with:
           path: _site
 
   deploy:
-    if: needs.build.outputs.ready == 'true'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
