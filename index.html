@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lucra Marble depo koridorlarında blok koduyla bundle bulun.">
+  <title>Depo Bulucu · Lucra Marble</title>
+  <link rel="icon" href="public/lucra-logo-square.png">
+  <link rel="stylesheet" href="warehouse.css?v=9">
+  <script src="bundle-data.js?v=4" defer></script>
+  <script src="warehouse.js?v=11" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell">
+      <div class="header-inner">
+        <img class="logo" src="public/lucra-logo.png" alt="Lucra Marble">
+        <h1>Depo Bulucu</h1>
+      </div>
+      <div class="search">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.1 4.1"/></svg>
+        <input id="block-search" type="search" aria-label="Blok kodu veya konum ara" placeholder="Blok veya konum · K990001, C12" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </div>
+      <p id="status" class="sr-only" role="status"></p>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="layout">
+      <section class="lookup" aria-label="Arama sonuçları" hidden>
+        <ul id="results" class="results"></ul>
+        <p id="empty" class="empty" hidden></p>
+      </section>
+      <section class="panel map" aria-labelledby="map-title">
+        <h2 id="map-title">Depo krokisi</h2>
+        <div id="plan" class="plan" role="group" aria-label="Depo krokisi"></div>
+      </section>
+    </div>
+    <footer>Telefon testi · Örnek veriler · <time id="last-updated"></time></footer>
+  </main>
+</body>
+</html>
