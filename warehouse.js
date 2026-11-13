@@ -1,6 +1,7 @@
 const search = document.querySelector('#block-search');
 const results = document.querySelector('#results');
-const moreResults = document.querySelector('#more-results');
+const lookup = document.querySelector('.lookup');
+const resultTitle = document.querySelector('#result-title');
 const status = document.querySelector('#status');
 const empty = document.querySelector('#empty');
 const plan = document.querySelector('#plan');
@@ -9,6 +10,7 @@ const occupiedPositions = new Set(bundles.map(bundle => bundle.position));
 const updated = document.querySelector('#last-updated');
 const refreshedAt = new Date(bundleDataUpdatedAt);
 const staleWarning = document.querySelector('#stale-warning');
+const freshLabel = document.querySelector('#fresh-label');
 const staleAfterMs = 2 * 60 * 60 * 1000;
 updated.dateTime = bundleDataUpdatedAt;
 updated.textContent = new Intl.DateTimeFormat('tr-TR', {
@@ -16,7 +18,9 @@ updated.textContent = new Intl.DateTimeFormat('tr-TR', {
 }).format(refreshedAt);
 
 function updateFreshness() {
-  staleWarning.hidden = Date.now() - refreshedAt.getTime() < staleAfterMs;
+  const stale = Date.now() - refreshedAt.getTime() >= staleAfterMs;
+  staleWarning.hidden = !stale;
+  freshLabel.hidden = stale;
 }
 
 updateFreshness();
@@ -51,16 +55,21 @@ for (let lane = 1; lane <= 4; lane++) {
       continue;
     }
     const position = row + number;
-    const card = element('button', 'position', position);
+    const card = element('button', 'position');
     card.type = 'button';
     card.id = `konum-${position}`;
+    const count = element('span', 'position-count');
+    count.setAttribute('aria-hidden', 'true');
+    count.hidden = true;
+    card.append(element('span', '', position), count);
     card.addEventListener('click', () => {
       search.value = position;
       clearPositionLink();
+      search.blur();
       render();
     });
     storage.append(card);
-    cards.set(position, card);
+    cards.set(position, { card, count });
   }
   plan.append(storage);
 }
@@ -73,7 +82,7 @@ function makeResult({ code, position, count }, label) {
   link.href = `#konum-${position}`;
   link.addEventListener('click', event => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (isInView(cards.get(position))) event.preventDefault();
+    if (isInView(cards.get(position).card)) event.preventDefault();
   });
   item.append(link);
   return item;
@@ -88,22 +97,26 @@ function render() {
     : exact ? bundle.code === query : bundle.code.includes(query)) : [];
   const tooBroad = !position && !exact && found.length > 4;
   const matches = tooBroad ? [] : found;
-  const positions = new Set(position ? [position] : matches.map(bundle => bundle.position));
-  for (const [position, card] of cards) card.classList.toggle('is-match', positions.has(position));
-  const rows = matches.map(bundle => makeResult(bundle, position
-    ? bundle.code
-    : exact ? bundle.position : `${bundle.code} · ${bundle.position}`));
-  const extraRows = rows.length > 4 ? rows.splice(3) : [];
-  if (extraRows.length) {
-    const more = element('a', '', `+${extraRows.length} sonuç`);
-    more.href = '#more-results';
-    const item = element('li', 'result');
-    item.append(more);
-    rows.push(item);
+  const counts = new Map();
+  for (const bundle of matches) {
+    counts.set(bundle.position, (counts.get(bundle.position) ?? 0) + bundle.count);
   }
-  results.replaceChildren(...rows);
-  moreResults.replaceChildren(...extraRows);
-  moreResults.hidden = extraRows.length === 0;
+  for (const [tile, { card, count }] of cards) {
+    const quantity = counts.get(tile);
+    const highlighted = tile === position || quantity !== undefined;
+    card.classList.toggle('is-match', highlighted);
+    card.setAttribute('aria-label', quantity === undefined ? tile : `${tile}, ${quantity} bundle`);
+    count.hidden = quantity === undefined;
+    count.textContent = quantity === undefined ? '' : `×${quantity}`;
+  }
+  // Exact block searches read directly from the tiles. Keep details for a position
+  // lookup and partial searches where different block codes can share a tile.
+  lookup.hidden = !query || (!position && exact);
+  resultTitle.textContent = position ?? '';
+  resultTitle.hidden = !position;
+  results.replaceChildren(...(lookup.hidden ? [] : matches.map(bundle => makeResult(bundle, position
+    ? bundle.code
+    : `${bundle.code} · ${bundle.position}`))));
   empty.hidden = !query || matches.length > 0;
   empty.textContent = tooBroad
     ? `${found.length} eşleşme var. Blok kodunu biraz daha yazın.`
@@ -120,6 +133,10 @@ function clearPositionLink() {
 search.addEventListener('input', () => {
   clearPositionLink();
   render();
+});
+search.form.addEventListener('submit', event => {
+  event.preventDefault();
+  search.blur();
 });
 const linkedPosition = location.hash.replace(/^#konum-/, '');
 if (cards.has(linkedPosition)) search.value = linkedPosition;
