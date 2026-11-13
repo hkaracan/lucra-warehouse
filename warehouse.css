@@ -24,7 +24,7 @@ body { margin: 0; }
 .preview-label span { width: 7px; height: 7px; border-radius: 50%; background: var(--aqua); }
 h1, h2, h3, p { margin: 0; }
 h1 { color: var(--navy); font-size: clamp(1rem, 3.5vw, 1.3rem); line-height: 1.1; }
-.layout { max-width: 680px; margin: 10px auto 16px; }
+.layout { display: grid; gap: 8px; max-width: 680px; margin: 10px auto 16px; }
 .panel { min-width: 0; background: white; border: 1px solid var(--line); border-radius: 14px; padding: clamp(16px, 3vw, 25px); }
 h2 { color: var(--navy); font-size: 1.15rem; }
 .search { position: relative; }
@@ -33,11 +33,14 @@ h2 { color: var(--navy); font-size: 1.15rem; }
 :focus-visible { outline: 3px solid var(--aqua-dark); outline-offset: 3px; }
 .refresh-status { margin-top: 4px; color: var(--muted); font-size: .75rem; }
 #stale-warning { color: #8a4b12; font-weight: 700; }
-.lookup { margin-bottom: 8px; scroll-margin-top: 140px; }
+.lookup { block-size: 88px; min-width: 0; }
 .results { max-width: 380px; margin: 0; padding: 0; list-style: none; }
+.lookup .results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .results:not(:empty) { border-inline-start: 3px solid var(--aqua); }
-.result + .result { border-top: 1px solid var(--line); }
-.result a { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding-inline: 10px 12px; color: var(--navy); font-size: .875rem; text-decoration: none; }
+.result a { display: flex; justify-content: space-between; align-items: center; gap: 6px; min-height: 44px; padding-inline: 8px; color: var(--navy); font-size: .8rem; text-decoration: none; }
+.result a strong { overflow-wrap: anywhere; }
+.result-count { flex-shrink: 0; }
+#more-results { scroll-margin-top: 140px; }
 .result a:hover strong, .result a:focus-visible strong { text-decoration: underline; }
 .result-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .empty { padding: 5px 0 1px; color: var(--muted); font-size: .85rem; }
@@ -46,18 +49,26 @@ h2 { color: var(--navy); font-size: 1.15rem; }
 .plan { display: grid; grid-template-columns: repeat(3, minmax(28px, .65fr) minmax(46px, 1fr)) minmax(28px, .65fr); gap: 4px; }
 .lane { display: flex; flex-direction: column; align-items: center; align-self: start; gap: 2px; padding: 2px 0; color: var(--muted); font-weight: 700; }
 .lane span { font-size: .65rem; font-weight: 600; }
-.storage { display: grid; grid-template-rows: 34px repeat(13, clamp(24px, 4.3dvh, 41px)); gap: 3px; text-align: center; min-width: 0; }
+.storage { display: grid; grid-template-rows: 34px repeat(13, 28px); gap: 3px; text-align: center; min-width: 0; }
 .storage-heading { align-self: center; color: var(--navy); font-weight: 750; }
 .position { display: grid; place-items: center; padding: 0 3px; border: 1px solid var(--line); border-radius: 4px; color: var(--navy); background: var(--mist); font: inherit; font-size: .8rem; line-height: 1.1; scroll-margin-top: 140px; cursor: pointer; }
 .position:hover { border-color: var(--aqua-dark); }
 .position.is-match { background: var(--aqua); border-color: var(--aqua-dark); color: var(--ink); font-weight: 750; }
 .selection { display: grid; place-items: center; padding: 1px 2px; border-radius: 4px; color: #563570; background: #efe7f6; font-size: .56rem; line-height: 1.05; overflow-wrap: anywhere; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (min-width: 760px) {
+  .layout { grid-template-columns: minmax(0, 680px) minmax(180px, 1fr); align-items: start; gap: 16px; max-width: none; }
+  .map { grid-area: 1 / 1 / 3 / 2; }
+  .lookup { block-size: auto; grid-area: 1 / 2; }
+  #more-results { grid-area: 2 / 2; }
+  .lookup .results { grid-template-columns: 1fr; }
+  .result + .result { border-top: 1px solid var(--line); }
+  .storage { grid-template-rows: 34px repeat(13, 36px); }
+}
 @media (max-width: 650px) {
   .header-inner { min-height: 44px; }
   .logo { width: 70px; }
   .preview-label { font-size: .7rem; }
-  .storage { grid-template-rows: 34px repeat(13, clamp(22px, 3.5dvh, 30px)); }
   .plan { gap: 3px; }
 }
 @media (max-width: 360px) {

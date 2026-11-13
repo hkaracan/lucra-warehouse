@@ -1,6 +1,6 @@
 const search = document.querySelector('#block-search');
 const results = document.querySelector('#results');
-const lookup = document.querySelector('.lookup');
+const moreResults = document.querySelector('#more-results');
 const status = document.querySelector('#status');
 const empty = document.querySelector('#empty');
 const plan = document.querySelector('#plan');
@@ -58,7 +58,6 @@ for (let lane = 1; lane <= 4; lane++) {
       search.value = position;
       clearPositionLink();
       render();
-      if (!isInView(lookup)) lookup.scrollIntoView({ block: 'start' });
     });
     storage.append(card);
     cards.set(position, card);
@@ -91,11 +90,21 @@ function render() {
   const matches = tooBroad ? [] : found;
   const positions = new Set(position ? [position] : matches.map(bundle => bundle.position));
   for (const [position, card] of cards) card.classList.toggle('is-match', positions.has(position));
-  results.replaceChildren(...matches.map(bundle => makeResult(bundle, position
+  const rows = matches.map(bundle => makeResult(bundle, position
     ? bundle.code
-    : exact ? bundle.position : `${bundle.code} · ${bundle.position}`)));
-  lookup.hidden = !query;
-  empty.hidden = matches.length > 0;
+    : exact ? bundle.position : `${bundle.code} · ${bundle.position}`));
+  const extraRows = rows.length > 4 ? rows.splice(3) : [];
+  if (extraRows.length) {
+    const more = element('a', '', `+${extraRows.length} sonuç`);
+    more.href = '#more-results';
+    const item = element('li', 'result');
+    item.append(more);
+    rows.push(item);
+  }
+  results.replaceChildren(...rows);
+  moreResults.replaceChildren(...extraRows);
+  moreResults.hidden = extraRows.length === 0;
+  empty.hidden = !query || matches.length > 0;
   empty.textContent = tooBroad
     ? `${found.length} eşleşme var. Blok kodunu biraz daha yazın.`
     : position

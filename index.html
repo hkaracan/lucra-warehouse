@@ -6,9 +6,9 @@
   <meta name="description" content="Lucra Marble depo koridorlarında blok koduyla bundle bulun.">
   <title>Depo Bulucu · Lucra Marble</title>
   <link rel="icon" href="public/lucra-logo-square.png">
-  <link rel="stylesheet" href="warehouse.css?v=10">
+  <link rel="stylesheet" href="warehouse.css?v=11">
   <script src="bundle-data.js?v=5" defer></script>
-  <script src="warehouse.js?v=12" defer></script>
+  <script src="warehouse.js?v=13" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -27,7 +27,7 @@
   </header>
   <main class="shell">
     <div class="layout">
-      <section class="lookup" aria-label="Arama sonuçları" hidden>
+      <section class="lookup" aria-label="Arama sonuçları">
         <ul id="results" class="results"></ul>
         <p id="empty" class="empty" hidden></p>
       </section>
@@ -35,6 +35,7 @@
         <h2 id="map-title">Depo krokisi</h2>
         <div id="plan" class="plan" role="group" aria-label="Depo krokisi"></div>
       </section>
+      <ul id="more-results" class="results" aria-label="Diğer arama sonuçları" hidden></ul>
     </div>
   </main>
 </body>
