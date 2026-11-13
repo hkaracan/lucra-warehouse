@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 POSITIONS = {f"{line}{number}" for line, end in (("A", 12), ("B", 13), ("C", 13))
              for number in range(1, end + 1)}
 ENTRY = re.compile(r"([KLA]?[0-9]+)-([1-6])")
+CATALOGUE_URL = "https://inventory.lucramarble.com/data/inventory.json"
 OUTPUT = Path(__file__).with_name("bundle-data.js")
 MAP_RANGE = "A5:D46"
 MAP_TAB_ID = "2131184337"
@@ -88,6 +89,29 @@ def collect_bundles(rows):
     return records
 
 
+def add_product_names(records, products):
+    names_by_code = {}
+    codes_by_number = {}
+    for product in products:
+        code = (product.get("code") or "").strip().upper()
+        name = (product.get("name") or "").strip()
+        if not name or not re.fullmatch(r"[A-Z][0-9]+", code):
+            continue
+        names_by_code.setdefault(code, set()).add(name)
+        codes_by_number.setdefault(code[1:], set()).add(code)
+
+    for record in records:
+        code = record["code"]
+        if code.isdigit():
+            candidates = codes_by_number.get(code, set())
+            if len(candidates) != 1:
+                continue
+            code = next(iter(candidates))
+        names = names_by_code.get(code, set())
+        if len(names) == 1:
+            record["name"] = next(iter(names))
+
+
 def save_snapshot(records):
     refreshed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with NamedTemporaryFile(mode="w", encoding="utf-8", dir=OUTPUT.parent, delete=False) as handle:
@@ -111,6 +135,7 @@ def main():
     sources = parser.add_mutually_exclusive_group()
     sources.add_argument("--from-json", action="store_true", help="Read Google Sheets values JSON from stdin")
     sources.add_argument("--link-shared", action="store_true", help="Read a Sheet shared with anyone who has its link")
+    parser.add_argument("--with-product-names", action="store_true", help="Match block codes to the Drive-backed inventory catalogue")
     args = parser.parse_args()
     try:
         if args.from_json:
@@ -120,6 +145,10 @@ def main():
         else:
             rows = read_sheet()
         records = collect_bundles(rows)
+        if args.with_product_names:
+            with urlopen(CATALOGUE_URL, timeout=30) as response:
+                products = json.load(response)["products"]
+            add_product_names(records, products)
         save_snapshot(records)
     except (ImportError, KeyError, OSError, ValueError) as error:
         parser.exit(1, f"Warehouse refresh failed: {error}\n")

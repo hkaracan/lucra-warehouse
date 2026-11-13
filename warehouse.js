@@ -74,11 +74,11 @@ for (let lane = 1; lane <= 4; lane++) {
   plan.append(storage);
 }
 
-function makeResult({ code, position, count }, label) {
+function makeResult({ code, position, count, name }, label) {
   const item = element('li', 'result');
   const link = element('a', '');
   link.append(element('strong', '', label), element('span', 'result-count', ` ×${count}`));
-  link.setAttribute('aria-label', `${code}, ${position}, ${count} bundle`);
+  link.setAttribute('aria-label', [name, code, position, `${count} bundle`].filter(Boolean).join(', '));
   link.href = `#konum-${position}`;
   link.addEventListener('click', event => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -88,15 +88,24 @@ function makeResult({ code, position, count }, label) {
   return item;
 }
 
+function normalizeName(value) {
+  return value.toLowerCase().replace(/ı/g, 'i').normalize('NFD').replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function render() {
   const query = search.value.toUpperCase().replace(/\s+/g, '');
   const position = cards.has(query) ? query : null;
   const exact = bundles.some(bundle => bundle.code === query);
+  const nameQuery = /\p{L}{2}/u.test(search.value) ? normalizeName(search.value) : '';
+  const nameMatches = nameQuery && !position && !exact
+    ? bundles.filter(bundle => bundle.name && nameQuery.split(' ').every(word => normalizeName(bundle.name).includes(word)))
+    : [];
   const found = query ? bundles.filter(bundle => position
     ? bundle.position === position
     : exact ? bundle.code === query : bundle.code.includes(query)) : [];
-  const tooBroad = !position && !exact && found.length > 4;
-  const matches = tooBroad ? [] : found;
+  const tooBroad = !position && !exact && nameMatches.length === 0 && found.length > 4;
+  const matches = nameMatches.length ? nameMatches : tooBroad ? [] : found;
   const counts = new Map();
   for (const bundle of matches) {
     counts.set(bundle.position, (counts.get(bundle.position) ?? 0) + bundle.count);
@@ -115,14 +124,14 @@ function render() {
   resultTitle.textContent = position ?? '';
   resultTitle.hidden = !position;
   results.replaceChildren(...(lookup.hidden ? [] : matches.map(bundle => makeResult(bundle, position
-    ? bundle.code
-    : `${bundle.code} · ${bundle.position}`))));
+    ? [bundle.code, bundle.name].filter(Boolean).join(' · ')
+    : [bundle.name, bundle.code, bundle.position].filter(Boolean).join(' · ')))));
   empty.hidden = !query || matches.length > 0;
   empty.textContent = tooBroad
     ? `${found.length} eşleşme var. Blok kodunu biraz daha yazın.`
     : position
     ? 'Bu konumda kayıtlı bundle yok.'
-    : 'Eşleşen blok veya konum bulunamadı.';
+    : 'Eşleşen ürün, blok veya konum bulunamadı.';
   status.textContent = !query ? '' : matches.length ? `${matches.length} sonuç bulundu.` : empty.textContent;
 }
 
