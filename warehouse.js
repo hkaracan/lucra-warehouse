@@ -5,15 +5,28 @@ const status = document.querySelector('#status');
 const empty = document.querySelector('#empty');
 const plan = document.querySelector('#plan');
 const cards = new Map();
-const occupancy = new Map();
-for (const { position, count } of bundles) {
-  occupancy.set(position, (occupancy.get(position) ?? 0) + count);
-}
+const occupiedPositions = new Set(bundles.map(bundle => bundle.position));
 const updated = document.querySelector('#last-updated');
+const refreshedAt = new Date(bundleDataUpdatedAt);
+const staleWarning = document.querySelector('#stale-warning');
+const staleAfterMs = 2 * 60 * 60 * 1000;
 updated.dateTime = bundleDataUpdatedAt;
 updated.textContent = new Intl.DateTimeFormat('tr-TR', {
   dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Istanbul',
-}).format(new Date(bundleDataUpdatedAt));
+}).format(refreshedAt);
+
+function updateFreshness() {
+  staleWarning.hidden = Date.now() - refreshedAt.getTime() < staleAfterMs;
+}
+
+updateFreshness();
+setInterval(updateFreshness, 60 * 1000);
+
+function isInView(node) {
+  const bounds = node.getBoundingClientRect();
+  return bounds.top >= document.querySelector('.site-header').getBoundingClientRect().bottom
+    && bounds.bottom <= window.innerHeight;
+}
 
 function element(tag, className, text = '') {
   const node = document.createElement(tag);
@@ -33,7 +46,7 @@ for (let lane = 1; lane <= 4; lane++) {
   storage.setAttribute('aria-label', row);
   storage.append(element('div', 'storage-heading', row));
   for (let number = 1; number <= 13; number++) {
-    if (row === 'A' && (number === 13 || (number === 12 && !occupancy.has('A12')))) {
+    if (row === 'A' && (number === 13 || (number === 12 && !occupiedPositions.has('A12')))) {
       storage.append(element('div', number === 13 ? 'selection' : '', number === 13 ? 'Seleksiyon Alanı' : ''));
       continue;
     }
@@ -41,18 +54,12 @@ for (let lane = 1; lane <= 4; lane++) {
     const card = element('button', 'position', position);
     card.type = 'button';
     card.id = `konum-${position}`;
-    const count = occupancy.get(position) ?? 0;
-    card.setAttribute('aria-label', `${position}, ${count} bundle`);
     card.addEventListener('click', () => {
       search.value = position;
       clearPositionLink();
       render();
-      lookup.scrollIntoView({ block: 'start' });
+      if (!isInView(lookup)) lookup.scrollIntoView({ block: 'start' });
     });
-    const slots = element('div', 'slots');
-    slots.setAttribute('aria-hidden', 'true');
-    for (let slot = 0; slot < count; slot++) slots.append(element('span', 'bundle-slot'));
-    card.append(slots);
     storage.append(card);
     cards.set(position, card);
   }
@@ -65,6 +72,10 @@ function makeResult({ code, position, count }, label) {
   link.append(element('strong', '', label), element('span', 'result-count', ` ×${count}`));
   link.setAttribute('aria-label', `${code}, ${position}, ${count} bundle`);
   link.href = `#konum-${position}`;
+  link.addEventListener('click', event => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (isInView(cards.get(position))) event.preventDefault();
+  });
   item.append(link);
   return item;
 }
