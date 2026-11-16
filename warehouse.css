@@ -54,6 +54,9 @@ h2 { color: var(--navy); font-size: 1.15rem; }
 .position.is-match { background: var(--aqua); border-color: var(--aqua-dark); color: var(--ink); font-weight: 750; }
 .selection { display: grid; place-items: center; padding: 1px 2px; border-radius: 4px; color: #563570; background: #efe7f6; font-size: .56rem; line-height: 1.05; overflow-wrap: anywhere; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.install-area { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+#install-app { min-height: 44px; background: none; border: 0; padding: 0 4px; color: var(--aqua-dark); font: inherit; text-decoration: underline; cursor: pointer; }
+#install-help p { margin: 0 4px 6px; }
 @media (min-width: 760px) {
   .layout { grid-template-columns: minmax(0, 680px) minmax(180px, 1fr); align-items: start; gap: 16px; max-width: none; }
   .map { grid-area: 1 / 1; }
