@@ -25,7 +25,10 @@ jobs:
       - name: Read and validate warehouse positions
         env:
           LUCRA_WAREHOUSE_SHEET_ID: ${{ secrets.LUCRA_WAREHOUSE_SHEET_ID }}
-        run: python3 sync_sheet.py --link-shared --with-product-names
+        run: |
+          python3 -m venv "$RUNNER_TEMP/lucra-sync"
+          "$RUNNER_TEMP/lucra-sync/bin/python" -m pip install 'openpyxl>=3.1,<4'
+          "$RUNNER_TEMP/lucra-sync/bin/python" sync_sheet.py --link-shared --with-product-names
 
       - name: Prepare public files
         run: |

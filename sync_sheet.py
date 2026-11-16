@@ -11,7 +11,9 @@ import re
 import sys
 from tempfile import NamedTemporaryFile
 from urllib.parse import quote
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from zipfile import BadZipFile
 
 
 POSITIONS = {f"{line}{number}" for line, end in (("A", 12), ("B", 13), ("C", 13))
@@ -21,6 +23,7 @@ CATALOGUE_URL = "https://inventory.lucramarble.com/data/inventory.json"
 OUTPUT = Path(__file__).with_name("bundle-data.js")
 MAP_RANGE = "A5:D46"
 MAP_TAB_ID = "2131184337"
+MAP_TAB_NAME = "Depo Krokisi"
 
 
 def read_sheet():
@@ -36,7 +39,7 @@ def read_sheet():
         credentials.refresh(GoogleRequest())
         token = credentials.token
 
-    area = quote(f"'Depo Krokisi'!{MAP_RANGE}", safe="")
+    area = quote(f"'{MAP_TAB_NAME}'!{MAP_RANGE}", safe="")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(sheet_id, safe='')}/values/{area}"
     with urlopen(Request(url, headers={"Authorization": f"Bearer {token}"}), timeout=30) as response:
         return json.load(response)["values"]
@@ -46,10 +49,40 @@ def read_link_shared_sheet():
     sheet_id = quote(os.environ["LUCRA_WAREHOUSE_SHEET_ID"], safe="")
     url = (f"https://docs.google.com/spreadsheets/d/{sheet_id}/export"
            f"?format=csv&gid={MAP_TAB_ID}&range={quote(MAP_RANGE, safe='')}")
+    try:
+        with urlopen(url, timeout=30) as response:
+            if response.headers.get_content_type() != "text/csv":
+                raise ValueError("The Sheet did not return CSV. Check its link sharing settings.")
+            return list(csv.reader(io.StringIO(response.read().decode("utf-8-sig"))))
+    except HTTPError as error:
+        # Google returns 400 for an Office workbook at the native CSV endpoint.
+        if error.code != 400:
+            raise
+        return read_link_shared_workbook(sheet_id)
+
+
+def read_link_shared_workbook(file_id):
+    from openpyxl import load_workbook
+    from openpyxl.utils.cell import range_boundaries
+
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
     with urlopen(url, timeout=30) as response:
-        if response.headers.get_content_type() != "text/csv":
-            raise ValueError("The Sheet did not return CSV. Check its link sharing settings.")
-        return list(csv.reader(io.StringIO(response.read().decode("utf-8-sig"))))
+        data = response.read()
+    try:
+        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except BadZipFile as error:
+        raise ValueError("Drive did not return an Excel workbook. Check its link sharing settings.") from error
+
+    try:
+        if MAP_TAB_NAME not in workbook.sheetnames:
+            raise ValueError(f"The Excel workbook is missing the {MAP_TAB_NAME} tab.")
+        min_col, min_row, max_col, max_row = range_boundaries(MAP_RANGE)
+        rows = workbook[MAP_TAB_NAME].iter_rows(
+            min_col=min_col, min_row=min_row, max_col=max_col, max_row=max_row, values_only=True
+        )
+        return [["" if value is None else value for value in row] for row in rows]
+    finally:
+        workbook.close()
 
 
 def collect_bundles(rows):
