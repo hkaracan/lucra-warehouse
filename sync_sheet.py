@@ -61,6 +61,16 @@ def read_link_shared_sheet():
         return read_link_shared_workbook(sheet_id)
 
 
+def workbook_cell_value(cell):
+    value = cell.value
+    # Excel can store a numeric code-count entry as a date while displaying
+    # the intended entry with its yyyy-m format (for example, 6140-1).
+    if (isinstance(value, datetime) and cell.number_format.lower() == "yyyy-m"
+            and value.day == 1 and value.time() == datetime.min.time()):
+        return f"{value.year}-{value.month}"
+    return "" if value is None else value
+
+
 def read_link_shared_workbook(file_id):
     from openpyxl import load_workbook
     from openpyxl.utils.cell import range_boundaries
@@ -78,9 +88,9 @@ def read_link_shared_workbook(file_id):
             raise ValueError(f"The Excel workbook is missing the {MAP_TAB_NAME} tab.")
         min_col, min_row, max_col, max_row = range_boundaries(MAP_RANGE)
         rows = workbook[MAP_TAB_NAME].iter_rows(
-            min_col=min_col, min_row=min_row, max_col=max_col, max_row=max_row, values_only=True
+            min_col=min_col, min_row=min_row, max_col=max_col, max_row=max_row
         )
-        return [["" if value is None else value for value in row] for row in rows]
+        return [[workbook_cell_value(cell) for cell in row] for row in rows]
     finally:
         workbook.close()
 
