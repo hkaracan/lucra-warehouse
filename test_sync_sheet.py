@@ -1,11 +1,77 @@
 import io
+import socket
 import unittest
 from datetime import datetime
-from unittest.mock import patch
+from http.client import IncompleteRead
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 from openpyxl import Workbook
 
 import sync_sheet
+
+
+class DownloadTests(unittest.TestCase):
+    def setUp(self):
+        self.log = io.StringIO()
+        self.stderr = patch.object(sync_sheet.sys, "stderr", self.log)
+        self.stderr.start()
+        self.addCleanup(self.stderr.stop)
+
+    def test_temporary_dns_failure_recovers_with_backoff(self):
+        error = URLError(socket.gaierror(socket.EAI_AGAIN, "Temporary failure in name resolution"))
+        with patch.object(sync_sheet, "urlopen", side_effect=[error, error, io.BytesIO(b"ok")]) as fetch:
+            with patch.object(sync_sheet, "sleep") as sleep:
+                self.assertEqual(sync_sheet.download("https://example.test", "Test source"), b"ok")
+        self.assertEqual(fetch.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4])
+
+    def test_incomplete_response_is_downloaded_again(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.side_effect = IncompleteRead(b"partial")
+        with patch.object(sync_sheet, "urlopen", side_effect=[response, io.BytesIO(b"complete")]):
+            with patch.object(sync_sheet, "sleep"):
+                self.assertEqual(sync_sheet.download("https://example.test", "Test source"), b"complete")
+
+    def test_temporary_server_errors_are_retried(self):
+        for status in (408, 429, 500, 502, 503, 504):
+            with self.subTest(status=status):
+                error = HTTPError("https://example.test", status, "Temporary error", {}, None)
+                with patch.object(sync_sheet, "urlopen", side_effect=[error, io.BytesIO(b"ok")]):
+                    with patch.object(sync_sheet, "sleep"):
+                        self.assertEqual(sync_sheet.download("https://example.test", "Test source"), b"ok")
+
+    def test_permanent_http_errors_are_not_retried(self):
+        for status in (400, 401, 403, 404):
+            with self.subTest(status=status):
+                error = HTTPError("https://example.test", status, "Permanent error", {}, None)
+                with patch.object(sync_sheet, "urlopen", side_effect=error) as fetch:
+                    with patch.object(sync_sheet, "sleep") as sleep:
+                        with self.assertRaises(HTTPError):
+                            sync_sheet.download("https://example.test", "Test source")
+                self.assertEqual(fetch.call_count, 1)
+                sleep.assert_not_called()
+
+    def test_exhausted_retries_stop_refresh_without_saving(self):
+        with patch.object(sync_sheet, "urlopen", side_effect=URLError("DNS unavailable")) as fetch:
+            with patch.object(sync_sheet, "sleep") as sleep:
+                with patch.object(sync_sheet, "save_snapshot") as save:
+                    with patch.dict(sync_sheet.os.environ, {"LUCRA_WAREHOUSE_SHEET_ID": "test-file"}):
+                        with patch.object(sync_sheet.sys, "argv", ["sync_sheet.py", "--link-shared"]):
+                            with self.assertRaises(SystemExit) as error:
+                                sync_sheet.main()
+        self.assertEqual(error.exception.code, 1)
+        self.assertEqual(fetch.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 8])
+        save.assert_not_called()
+
+    def test_office_export_still_falls_back_on_http_400(self):
+        error = HTTPError("https://example.test", 400, "Office workbook", {}, None)
+        with patch.object(sync_sheet, "urlopen", side_effect=error):
+            with patch.object(sync_sheet, "read_link_shared_workbook", return_value=[["C8", "6140-1"]]) as workbook:
+                with patch.dict(sync_sheet.os.environ, {"LUCRA_WAREHOUSE_SHEET_ID": "test-file"}):
+                    self.assertEqual(sync_sheet.read_link_shared_sheet(), [["C8", "6140-1"]])
+        workbook.assert_called_once_with("test-file")
 
 
 class WorkbookImportTests(unittest.TestCase):

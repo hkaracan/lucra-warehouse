@@ -14,3 +14,8 @@ link. The website does not include that link or the Sheet ID.
 
 Refresh runs hourly at :23 and can also be started manually. A failed read or
 invalid Sheet entry leaves the last successful site online.
+
+Downloads retry temporary DNS, connection, timeout, and server errors for up to
+four attempts, waiting 2, 4, then 8 seconds. This applies to both the warehouse workbook
+and product catalogue. Permanent HTTP errors and invalid warehouse entries still
+stop the refresh; the previous published site stays online if recovery fails.

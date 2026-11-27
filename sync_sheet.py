@@ -3,6 +3,7 @@
 import argparse
 import csv
 from datetime import datetime, timezone
+from http.client import IncompleteRead
 import io
 import json
 import os
@@ -10,8 +11,9 @@ from pathlib import Path
 import re
 import sys
 from tempfile import NamedTemporaryFile
+from time import sleep
 from urllib.parse import quote
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from zipfile import BadZipFile
 
@@ -24,6 +26,28 @@ OUTPUT = Path(__file__).with_name("bundle-data.js")
 MAP_RANGE = "A5:D46"
 MAP_TAB_ID = "2131184337"
 MAP_TAB_NAME = "Depo Krokisi"
+DOWNLOAD_ATTEMPTS = 4
+RETRY_HTTP_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+def download(url, source, *, content_type=None):
+    """Retry temporary failures, including failures while reading the body."""
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        try:
+            with urlopen(url, timeout=30) as response:
+                if content_type and response.headers.get_content_type() != content_type:
+                    raise ValueError(f"{source} did not return {content_type}. Check its link sharing settings.")
+                return response.read()
+        except (HTTPError, URLError, TimeoutError, ConnectionError, IncompleteRead) as error:
+            if isinstance(error, HTTPError) and error.code not in RETRY_HTTP_STATUS:
+                raise
+            if attempt == DOWNLOAD_ATTEMPTS:
+                raise OSError(f"{source}: download failed after {attempt} attempts: {error}") from error
+            delay = 2 ** attempt
+            # Use a label, never the URL: the Sheet ID and auth stay out of logs.
+            print(f"{source}: temporary download failure; retrying in {delay}s "
+                  f"(attempt {attempt + 1}/{DOWNLOAD_ATTEMPTS}).", file=sys.stderr)
+            sleep(delay)
 
 
 def read_sheet():
@@ -41,8 +65,8 @@ def read_sheet():
 
     area = quote(f"'{MAP_TAB_NAME}'!{MAP_RANGE}", safe="")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(sheet_id, safe='')}/values/{area}"
-    with urlopen(Request(url, headers={"Authorization": f"Bearer {token}"}), timeout=30) as response:
-        return json.load(response)["values"]
+    request = Request(url, headers={"Authorization": f"Bearer {token}"})
+    return json.loads(download(request, "Google Sheets"))["values"]
 
 
 def read_link_shared_sheet():
@@ -50,10 +74,8 @@ def read_link_shared_sheet():
     url = (f"https://docs.google.com/spreadsheets/d/{sheet_id}/export"
            f"?format=csv&gid={MAP_TAB_ID}&range={quote(MAP_RANGE, safe='')}")
     try:
-        with urlopen(url, timeout=30) as response:
-            if response.headers.get_content_type() != "text/csv":
-                raise ValueError("The Sheet did not return CSV. Check its link sharing settings.")
-            return list(csv.reader(io.StringIO(response.read().decode("utf-8-sig"))))
+        data = download(url, "Google Sheet export", content_type="text/csv")
+        return list(csv.reader(io.StringIO(data.decode("utf-8-sig"))))
     except HTTPError as error:
         # Google returns 400 for an Office workbook at the native CSV endpoint.
         if error.code != 400:
@@ -76,8 +98,7 @@ def read_link_shared_workbook(file_id):
     from openpyxl.utils.cell import range_boundaries
 
     url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    with urlopen(url, timeout=30) as response:
-        data = response.read()
+    data = download(url, "Drive workbook")
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     except BadZipFile as error:
@@ -189,8 +210,7 @@ def main():
             rows = read_sheet()
         records = collect_bundles(rows)
         if args.with_product_names:
-            with urlopen(CATALOGUE_URL, timeout=30) as response:
-                products = json.load(response)["products"]
+            products = json.loads(download(CATALOGUE_URL, "Product catalogue"))["products"]
             add_product_names(records, products)
         save_snapshot(records)
     except (ImportError, KeyError, OSError, ValueError) as error:
